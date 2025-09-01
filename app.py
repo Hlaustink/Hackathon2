@@ -1,5 +1,4 @@
-# app.py
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, send_file
 from flask_cors import CORS
 import mysql.connector
 from mysql.connector import pooling
@@ -7,6 +6,9 @@ import requests
 import os
 import bcrypt
 import re
+import jwt
+import datetime
+from functools import wraps
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -15,42 +17,53 @@ load_dotenv()
 app = Flask(__name__)
 # Be more specific with CORS in production for security
 CORS(app, supports_credentials=True)
-app.secret_key = os.getenv('FLASK_SECRET_KEY')
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'fallback-secret-key-change-in-production')
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_SECURE'] = False
 
-# --- DATABASE CONFIGURATION ---
+# Database configuration
 db_config = {
-    'user': os.getenv('DB_USER'),
-    'password': os.getenv('DB_PASSWORD'),
-    'host': os.getenv('DB_HOST'),
-    'database': os.getenv('DB_NAME')
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'database': os.getenv('DB_NAME', 'flashcard_db')
 }
 
-# Ensure all database environment variables are set
-if not all(db_config.values()):
-    raise ValueError("One or more database environment variables (DB_USER, DB_PASSWORD, DB_HOST, DB_NAME) are not set.")
-
-# Create a connection pool for better performance
-db_pool = mysql.connector.pooling.MySQLConnectionPool(
-    pool_name="db_pool",
-    pool_size=5,  # Adjust pool size based on expected load
-    **db_config
-)
+# Create a connection pool
+try:
+    db_pool = mysql.connector.pooling.MySQLConnectionPool(
+        pool_name="db_pool",
+        pool_size=5,
+        **db_config
+    )
+    print("Database connection pool created successfully!")
+except mysql.connector.Error as e:
+    print(f"Error creating connection pool: {e}")
+    db_pool = None
 
 def get_db_connection():
-    return db_pool.get_connection()
+    if db_pool:
+        return db_pool.get_connection()
+    return mysql.connector.connect(**db_config)
 
-# --- HUGGING FACE API CONFIGURATION ---
+# JWT Configuration
+JWT_SECRET = os.getenv('JWT_SECRET', 'fallback-jwt-secret')
+JWT_ALGORITHM = 'HS256'
+
+# Hugging Face API Configuration
 HF_TOKEN = os.getenv('HUGGING_FACE_TOKEN')
 if not HF_TOKEN:
     raise ValueError("HUGGING_FACE_TOKEN environment variable not set.")
     
 # Using a more reliable model
 HF_API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
-HF_HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"}
+HF_HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
 
-# --- INTASEND CONFIGURATION (SANDBOX) ---
+# Early adopter and premium tier constants
+EARLY_ADOPTER_LIMIT = 5
+PREMIUM_TIER = 'premium'
+
+# IntaSend Configuration
 try:
     from intasend import APIService
     
@@ -62,21 +75,20 @@ try:
         # Initialize Intasend service (SANDBOX MODE - test=True)
         intasend_service = APIService(
             publishable_key=INTASEND_PUBLISHABLE_KEY,
-            secret_key=INTASEND_SECRET_KEY,
-            test=True  # ← CRUCIAL: This enables sandbox mode!
+            token=INTASEND_SECRET_KEY,
+            test=True
         )
-        print("Intasend payment service initialized successfully!")
+        print("IntaSend payment service initialized!")
     else:
         print("Warning: Intasend keys not set. Payment features will be disabled.")
         intasend_service = None
-        
+        print("IntaSend keys not set. Payment features disabled.")
 except ImportError:
     print("Warning: intasend package not installed. Payment features disabled.")
     intasend_service = None
 
 # --- PASSWORD UTILITY FUNCTIONS ---
 def hash_password(password):
-    """Hash a password for storing."""
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
     return hashed.decode('utf-8')
@@ -89,8 +101,7 @@ def verify_password(stored_password, provided_password):
     )
 
 def is_valid_email(email):
-    """Basic email validation"""
-    pattern = r'^[a-zA-Z00-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
 def is_valid_username(username):
@@ -147,26 +158,25 @@ initialize_default_deck()
 
 # --- UTILITY FUNCTIONS ---
 def clean_text(text):
-    """Clean and preprocess the input text."""
     text = re.sub(r'\s+', ' ', text)
     text = re.sub(r'[^\w\s.,!?;:]', '', text)
     return text.strip()
 
 def split_into_sentences(text):
-    """Split text into sentences using basic punctuation."""
     sentences = re.split(r'(?<=[.!?])\s+', text)
-    return [s for s in sentences if s and len(s.split()) > 3]  # Reduced to 3 words minimum
+    return [s for s in sentences if s and len(s.split()) > 3]
 
 def generate_question(context):
-    """Generate a question using Hugging Face Inference API with a fallback."""
     try:
-        # Updated prompt for the new model
+        if not HF_TOKEN:
+            raise Exception("Hugging Face token not configured")
+            
         response = requests.post(
             HF_API_URL,
             headers=HF_HEADERS, 
             json={"inputs": f"Generate a question about: {context}"}, 
             timeout=15
-        )  # Increased timeout
+        )
         response.raise_for_status()
         result = response.json()
         
@@ -175,38 +185,34 @@ def generate_question(context):
         elif isinstance(result, dict) and 'generated_text' in result:
             return result['generated_text']
             
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print(f"Hugging Face API error: {e}")
     
-    # Fallback if API fails or returns unexpected format
+    # Fallback
     words = context.split()
     if len(words) > 3:
         blank_index = len(words) // 2
         words[blank_index] = "______"
-        return " ".join(words) + "?"
+        return " ".join(words)
     return f"What is {context}?"
 
-def store_flashcards(flashcards, user_id=1):
-    """Store a list of generated flashcards in the database efficiently and securely."""
+def store_flashcards(flashcards, user_id):
     if not flashcards:
         return
-
-    # SQL statement with placeholders for security
-    sql = "INSERT INTO flashcards (deck_id, question, answer) VALUES (%s, %s, %s)"
-    
-    # Prepare data for bulk insert - using deck_id = 1 which now exists
-    data_to_insert = [(1, card['question'], card['answer']) for card in flashcards]
 
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Use executemany for efficient bulk insertion
-        cursor.executemany(sql, data_to_insert)
+        for card in flashcards:
+            cursor.execute(
+                "INSERT INTO flashcards (user_id, question, answer) VALUES (%s, %s, %s)",
+                (user_id, card['question'], card['answer'])
+            )
         
         conn.commit()
-        print(f"{cursor.rowcount} flashcards stored successfully in database!")
+        print(f"Stored {len(flashcards)} flashcards for user {user_id}")
         
     except mysql.connector.Error as e:
         print(f"Database error: {e}")
@@ -217,10 +223,116 @@ def store_flashcards(flashcards, user_id=1):
             cursor.close()
             conn.close()
 
-# --- AUTHENTICATION ROUTES ---
+# JWT Token Decorator
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        
+        if not token:
+            return jsonify({'error': 'Token is missing'}), 401
+            
+        try:
+            if token.startswith('Bearer '):
+                token = token[7:]
+                
+            data = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT id, username, email, is_premium FROM users WHERE id = %s", (data['user_id'],))
+            current_user = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if not current_user:
+                return jsonify({'error': 'User not found'}), 401
+                
+            request.current_user = current_user
+            
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token has expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Token is invalid'}), 401
+            
+        return f(*args, **kwargs)
+        
+    return decorated
+
+# Initialize Database
+def initialize_database():
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Create users table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                email VARCHAR(100) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                is_premium BOOLEAN DEFAULT FALSE,
+                tier ENUM('free', 'early_adopter', 'premium') DEFAULT 'free',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Create flashcards table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS flashcards (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Create payments table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                invoice_id VARCHAR(255) NOT NULL,
+                amount DECIMAL(10, 2) NOT NULL,
+                currency VARCHAR(10) NOT NULL,
+                status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        
+        conn.commit()
+        print("Database tables initialized successfully!")
+        
+    except mysql.connector.Error as e:
+        print(f"Error initializing database: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+# Initialize the database when the app starts
+initialize_database()
+
+# Route to serve HTML files
+@app.route('/')
+def serve_index():
+    return send_file('index.html')
+
+@app.route('/ai-app')
+def serve_ai_app():
+    return send_file('ai-app.html')
+
+# Authentication endpoints
 @app.route('/register', methods=['POST'])
 def register():
-    """Register a new user"""
     conn = None
     try:
         data = request.json
@@ -249,6 +361,11 @@ def register():
                       (username, email))
         if cursor.fetchone():
             return jsonify({'error': 'Username or email already exists'}), 400
+        
+        # Check early adopter status
+        cursor.execute("SELECT COUNT(*) as count FROM users WHERE tier = 'early_adopter'")
+        early_adopter_count = cursor.fetchone()[0]
+        tier = 'early_adopter' if early_adopter_count < EARLY_ADOPTER_LIMIT else 'free'
         
         # Create new user
         hashed_password = hash_password(password)
@@ -304,198 +421,250 @@ def login():
         if not user:
             return jsonify({'error': 'Invalid credentials'}), 401
             
-        # Verify password
-        user_id, username, stored_password, is_premium = user
+        user_id, username, stored_password, tier = user
         if not verify_password(stored_password, password):
             return jsonify({'error': 'Invalid credentials'}), 401
         
-        # Start user session
-        session['user_id'] = user_id
-        session['username'] = username
-        session['is_premium'] = bool(is_premium)
+        # Generate JWT token
+        token = jwt.encode({
+            'user_id': user_id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        }, JWT_SECRET, algorithm=JWT_ALGORITHM)
         
         return jsonify({
-            'message': 'Login successful',
-            'user': {'id': user_id, 'username': username, 'is_premium': bool(is_premium)}
+            'success': 'Login successful',
+            'token': token,
+            'user': {
+                'id': user_id,
+                'username': username,
+                'tier': tier
+            }
         })
         
     except Exception as e:
-        print(f"Login failed: {e}")
+        print(f"Login error: {e}")
         return jsonify({'error': 'Login failed'}), 500
     finally:
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
 
-@app.route('/logout', methods=['POST'])
-def logout():
-    """Logout the current user"""
-    session.clear()
-    return jsonify({'message': 'Logout successful'})
-
-@app.route('/check-auth', methods=['GET'])
-def check_auth():
-    """Check if user is authenticated"""
-    user_id = session.get('user_id')
-    username = session.get('username')
-    is_premium = session.get('is_premium', False)
-    
-    if user_id and username:
-        return jsonify({
-            'authenticated': True,
-            'user': {'id': user_id, 'username': username, 'is_premium': is_premium}
-        })
-    return jsonify({'authenticated': False})
-
-# --- PAYMENT ROUTES ---
-@app.route('/create-payment-link', methods=['POST'])
-def create_payment_link():
-    """Create a payment link for premium upgrade"""
-    if not intasend_service:
-        return jsonify({'error': 'Payment service not configured'}), 503
-        
+@app.route('/verify-token', methods=['POST'])
+def verify_token():
     try:
-        user_id = session.get('user_id')
+        data = request.json
+        token = data.get('token', '')
         
-        if not user_id:
-            return jsonify({'error': 'Please login first'}), 401
+        if not token:
+            return jsonify({'error': 'Token is required'}), 400
             
-        # Get user email from database
+        if token.startswith('Bearer '):
+            token = token[7:]
+            
+        # Decode and verify token
+        token_data = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        
+        # Verify user exists
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT email FROM users WHERE id = %s", (user_id,))
-        result = cursor.fetchone()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, username, email, tier FROM users WHERE id = %s", (token_data['user_id'],))
+        user = cursor.fetchone()
         cursor.close()
         conn.close()
         
-        if not result:
-            return jsonify({'error': 'User not found'}), 404
+        if user:
+            return jsonify({
+                'authenticated': True,
+                'user': {
+                    'id': user['id'],
+                    'username': user['username'],
+                    'email': user['email'],
+                    'tier': user['tier']
+                }
+            })
+        else:
+            return jsonify({'authenticated': False}), 401
             
-        user_email = result[0]
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token is invalid'}), 401
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Payment endpoints
+@app.route('/create-payment-intent', methods=['POST'])
+@token_required
+def create_payment_intent():
+    try:
+        if not intasend_service:
+            return jsonify({'error': 'Payment service not configured'}), 503
+            
+        amount = 1  # $1
+        currency = 'USD'
         
-        # Create payment link with Intasend
-        response = intasend_service.create_payment_link(
-            amount=5,  # $5 for premium
-            currency='USD',
-            email=user_email,
-            name="Premium Flashcard Upgrade",
-            redirect_url="http://localhost:3000/payment-success",  # Your frontend success page
-            webhook_url="http://localhost:5000/payment-webhook"   # For backend confirmation
+        payment = intasend_service.create_payment(
+            amount=amount,
+            currency=currency,
+            methods=['CARD', 'MPESA', 'BANK'],
+            first_name=request.current_user['username'],
+            email=request.current_user['email'],
+            narrative='BrainFlip Premium Access'
         )
         
-        return jsonify({
-            'success': True,
-            'payment_url': response['url'],
-            'invoice_id': response['invoice']['invoice_id']
-        })
+        # Store payment in database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO payments (user_id, invoice_id, amount, currency) VALUES (%s, %s, %s, %s)",
+            (request.current_user['id'], payment['invoice']['invoice_id'], amount, currency)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
         
+        return jsonify({
+            'invoice_id': payment['invoice']['invoice_id'],
+            'payment_url': payment['invoice']['url'],
+            'amount': amount,
+            'currency': currency
+        })
+    
     except Exception as e:
         print(f"Payment error: {e}")
-        return jsonify({'error': 'Failed to create payment link'}), 500
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/verify-payment', methods=['POST'])
+@token_required
+def verify_payment():
+    try:
+        data = request.json
+        invoice_id = data.get('invoice_id', '')
+        
+        if not invoice_id:
+            return jsonify({'error': 'Invoice ID is required'}), 400
+        
+        if not intasend_service:
+            return jsonify({'error': 'Payment service not configured'}), 503
+            
+        # Check payment status with IntaSend
+        status = intasend_service.status(invoice_id)
+        
+        if status['invoice']['state'] == 'COMPLETE':
+            # Update payment status in database
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                "UPDATE payments SET status = 'COMPLETED' WHERE invoice_id = %s",
+                (invoice_id,)
+            )
+            
+            # Upgrade user to premium
+            cursor.execute(
+                "UPDATE users SET tier = %s WHERE id = %s",
+                (PREMIUM_TIER, request.current_user['id'])
+            )
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            # Generate new token with updated user info
+            new_token = jwt.encode({
+                'user_id': request.current_user['id'],
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+            }, JWT_SECRET, algorithm=JWT_ALGORITHM)
+            
+            return jsonify({
+                'success': 'Payment verified and account upgraded to premium',
+                'token': new_token,
+                'tier': PREMIUM_TIER
+            })
+        else:
+            return jsonify({
+                'error': 'Payment not completed',
+                'status': status['invoice']['state']
+            }), 400
+    
+    except Exception as e:
+        print(f"Payment verification error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/payment-webhook', methods=['POST'])
 def payment_webhook():
-    """Handle payment confirmation from Intasend (SECURE VERSION)"""
-    if not intasend_service:
-        return jsonify({'error': 'Payment service not configured'}), 503
-        
+    """Handle IntaSend payment webhooks"""
     try:
-        # Get the webhook signature from headers
-        signature = request.headers.get('IntaSend-Signature')
-        webhook_secret = os.getenv('INTASEND_WEBHOOK_SECRET')
-        
-        # Verify the webhook signature
-        if not signature or not webhook_secret:
-            print("Webhook security alert: Missing signature or secret")
-            return jsonify({'error': 'Invalid webhook request'}), 401
+        if not intasend_service:
+            return jsonify({'error': 'Payment service not configured'}), 503
             
-        # In a real implementation, you would verify the signature here
-        # For the hackathon, we'll simulate the verification
-        print(f"Webhook signature received: {signature}")
-        print("Webhook verification simulated - would verify signature in production")
+        # Verify webhook signature (important for security)
+        signature = request.headers.get('X-IntaSend-Signature')
+        payload = request.get_data()
         
-        # Now process the webhook data
+        # Verify signature using your secret token
+        # Implementation depends on IntaSend's webhook signature method
+        
         data = request.json
         invoice_id = data.get('invoice_id')
         status = data.get('status')
-        customer = data.get('customer', {})
         
-        print(f"Secure webhook received: {invoice_id} - {status}")
+        # Update payment status in database
+        conn = get_db_connection()
+        cursor = conn.cursor()
         
-        if status == 'COMPLETED':
-            user_email = customer.get('email')
+        cursor.execute(
+            "UPDATE payments SET status = %s WHERE invoice_id = %s",
+            (status, invoice_id)
+        )
+        
+        # If payment is complete, upgrade user
+        if status == 'COMPLETE':
+            cursor.execute(
+                "SELECT user_id FROM payments WHERE invoice_id = %s",
+                (invoice_id,)
+            )
+            result = cursor.fetchone()
             
-            if user_email:
-                # Update user to premium status
-                conn = get_db_connection()
-                cursor = conn.cursor()
+            if result:
+                user_id = result[0]
                 cursor.execute(
-                    "UPDATE users SET is_premium = TRUE WHERE email = %s",
-                    (user_email,)
+                    "UPDATE users SET tier = %s WHERE id = %s",
+                    (PREMIUM_TIER, user_id)
                 )
-                conn.commit()
-                cursor.close()
-                conn.close()
-                
-                print(f"User with email {user_email} upgraded to premium for invoice {invoice_id}")
-                # In real app, you might want to send a confirmation email here
-            else:
-                print(f"Payment completed but no email found for invoice {invoice_id}")
         
-        return jsonify({'status': 'success'})
+        conn.commit()
+        cursor.close()
+        conn.close()
         
+        return jsonify({'success': True})
+    
     except Exception as e:
         print(f"Webhook error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/check-premium', methods=['GET'])
-def check_premium():
-    """Check if current user has premium status"""
-    try:
-        user_id = session.get('user_id')
-        if not user_id:
-            return jsonify({'is_premium': False})
-            
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT is_premium FROM users WHERE id = %s",
-            (user_id,)
-        )
-        result = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        
-        if result:
-            # Update session with current premium status
-            session['is_premium'] = bool(result[0])
-            return jsonify({'is_premium': bool(result[0])})
-        return jsonify({'is_premium': False})
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- FLASHCARD ROUTES ---
+# Flashcard endpoints
 @app.route('/generate-flashcards', methods=['POST'])
+@token_required
 def generate_flashcards_route():
-    conn = None
     try:
-        # Check if user is authenticated
-        user_id = session.get('user_id')
-        if not user_id:
-            return jsonify({'error': 'Please login to generate flashcards'}), 401
-            
         data = request.json
         notes = data.get('notes', '')
         
         if not notes:
             return jsonify({'error': 'No notes provided'}), 400
         
+        # Check if user has access
+        if request.current_user['tier'] == 'free':
+            return jsonify({
+                'error': 'Premium feature. Upgrade to access AI flashcard generation.',
+                'requiresPayment': True
+            }), 402
+        
         cleaned_notes = clean_text(notes)
         sentences = split_into_sentences(cleaned_notes)
         
         flashcards = []
-        # Limit to the first 10 valid sentences for the demo
         for sentence in sentences[:10]:
             question = generate_question(sentence)
             if question:
@@ -505,39 +674,30 @@ def generate_flashcards_route():
             return jsonify({'error': 'Could not generate flashcards from the provided text.'}), 400
             
         # Store in the database
-        store_flashcards(flashcards, user_id)
+        store_flashcards(flashcards, request.current_user['id'])
         
-        return jsonify({'flashcards': flashcards})
+        return jsonify({
+            'flashcards': flashcards,
+            'tier': request.current_user['tier']
+        })
         
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"Flashcard generation error: {e}")
         return jsonify({'error': 'An internal server error occurred.'}), 500
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint to verify API and DB connectivity."""
-    conn = None
-    try:
-        conn = get_db_connection()
-        if conn.is_connected():
-            return jsonify({'status': 'healthy', 'database': 'connected'})
-    except mysql.connector.Error as e:
-        return jsonify({'status': 'healthy', 'database': 'error', 'message': str(e)})
-    finally:
-        if conn and conn.is_connected():
-            conn.close()
-        
-    return jsonify({'status': 'healthy', 'database': 'unknown'})
-
 @app.route('/flashcards', methods=['GET'])
+@token_required
 def get_flashcards():
-    """Endpoint to retrieve all flashcards from the database."""
+    """Get all flashcards for the current user"""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
-        cursor.execute("SELECT question, answer FROM flashcards")
+        cursor.execute(
+            "SELECT question, answer FROM flashcards WHERE user_id = %s ORDER BY created_at DESC",
+            (request.current_user['id'],)
+        )
         flashcards = cursor.fetchall()
         
         return jsonify({'flashcards': flashcards})
@@ -548,6 +708,11 @@ def get_flashcards():
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
+
+# Health check endpoint
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({'status': 'healthy', 'service': 'BrainFlip API'})
 
 if __name__ == '__main__':
     # This will fail if FLASK_SECRET_KEY is not set in .env
