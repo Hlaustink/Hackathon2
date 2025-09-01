@@ -3,5 +3,6 @@ Flask-CORS
 mysql-connector-python
 requests
 python-dotenv
+intasend-python
 
 pip freeze > requirements.txt

@@ -79,3 +79,43 @@ INTASEND_PUBLISHABLE_KEY=pk_test_your_key_here
 INTASEND_SECRET_KEY=sk_test_your_key_here
 INTASEND_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 ```
+
+## How to use
+### Starting the application locally
+### 1. Start mysql server on your machine.
+### 2. Start the Backend server
+``` bash
+# Activate virtual environment (if created)
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Run the Flask application
+python app.py
+```
+Backend server will run on http://localhost:5000
+### 3. Open the frontend
+Open index.html directly in your web browser or user live server.
+
+## Using the App
+- Register/Login - Create an account or use demo credentials
+- Enter Notes - Paste your study notes into the textarea
+- Generate Flashcards - AI will create questions from your notes
+- Study - Click flashcards to flip them and test your knowledge
+- Go Premium - Upgrade for additional features (sandbox mode)
+
+## API Endpoints
+### Authentication
+- POST /register - Create new user
+- POST /login - User login
+- POST /logout - User logout
+- GET /check-auth - Check authentication status
+### Flashcards
+- POST /generate-flashcards - Generate flashcards from text
+- GET /flashcards - Retrieve all flashcards
+### Payments
+- POST /create-payment-link - Create Intasend payment link
+- POST /payment-webhook - Handle payment confirmation
+- GET /check-premium - Check user premium status
+### Health
+- GET /health - API health check
+
+## AI Prompt Engineering
