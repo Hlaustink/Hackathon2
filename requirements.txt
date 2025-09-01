@@ -1,1 +1,7 @@
+Flask
+Flask-CORS
+mysql-connector-python
+requests
+python-dotenv
+
 pip freeze > requirements.txt

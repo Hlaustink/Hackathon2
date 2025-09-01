@@ -1,6 +1,5 @@
--- database.sql
--- This file contains all SQL commands to set up the database from scratch
--- Run this file before starting the application for the first time
+-- All SQL commands to set up the database from scratch
+-- Run this file before starting the Flask application
 
 -- Create the database
 CREATE DATABASE IF NOT EXISTS flashcard_app;
@@ -37,10 +36,19 @@ CREATE TABLE IF NOT EXISTS flashcards (
     FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
 );
 
--- Insert default user and deck for the application
-INSERT IGNORE INTO users (id, username, email, password_hash) VALUES 
-(1, 'default_user', 'demo@example.com', 'demo_password_hash');
+-- Add indexes for better query performance
+CREATE INDEX idx_decks_user_id ON decks(user_id);
+CREATE INDEX idx_flashcards_deck_id ON flashcards(deck_id);
 
-INSERT IGNORE INTO decks (id, user_id, title, description) VALUES 
-(1, 1, 'Default Deck', 'Automatically created default deck for flashcards');
+-- Insert default user and deck FIRST
+INSERT IGNORE INTO users (id, username, email, password_hash, is_premium) VALUES 
+(1, 'demo_user', 'demo@example.com', '$2b$12$EXAMPLEHASHEDPASSWORD1234567890', FALSE);
 
+INSERT IGNORE INTO decks (id, user_id, title, description, is_public) VALUES 
+(1, 1, 'Default Deck', 'Automatically created default deck for flashcards', FALSE);
+
+-- THEN insert sample flashcards
+INSERT IGNORE INTO flashcards (deck_id, question, answer) VALUES
+(1, 'What is the capital of France?', 'Paris'),
+(1, 'What is the largest planet in our solar system?', 'Jupiter'),
+(1, 'Who wrote Romeo and Juliet?', 'William Shakespeare');
