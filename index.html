@@ -3,81 +3,275 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Flashcard Generator</title>
+    <title>BrainFlip - AI-Powered Flashcard Generator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
-
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>AI Flashcard Generator</h1>
-            <p class="subtitle">Transform your notes into interactive study cards in seconds</p>
-        </header>
-
-        <div class="main-content">
-            <div class="input-section">
-                <h2 class="section-title">
-                    <i>📝</i> Input Your Notes
-                </h2>
-                <textarea id="notes-input" placeholder="Paste your study notes here..."></textarea>
-                
-                <div class="options">
-                    <div class="option">
-                        <label for="language">Language:</label>
-                        <select id="language">
-                            <option value="english">English</option>
-                            <option value="french">French</option>
-                            <option value="spanish">Spanish</option>
-                            <option value="german">German</option>
-                            <option value="swahili">Swahili</option>
-                        </select>
+    <header>
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="nav-logo">
+                    <i class="fas fa-brain"></i>
+                    <span>BrainFlip</span>
+                </div>
+                <div class="nav-menu">
+                    <a href="#features" class="nav-link">Features</a>
+                    <a href="#pricing" class="nav-link">Pricing</a>
+                    <a href="#about" class="nav-link">About</a>
+                    <button class="btn-outline" id="login-btn">Login</button>
+                    <button class="btn-primary" id="register-btn">Register</button>
+                    <div class="theme-toggle">
+                        <input type="checkbox" id="dark-mode-toggle" hidden>
+                        <label for="dark-mode-toggle" class="theme-toggle-label">
+                            <i class="fas fa-sun"></i>
+                            <i class="fas fa-moon"></i>
+                            <span class="theme-toggle-ball"></span>
+                        </label>
                     </div>
                 </div>
-                
-                <button id="generate-btn">
-                    <i>⚡</i> Generate Flashcards
-                </button>
-                
-                <div class="progress">
-                    <div class="progress-bar" id="progress-bar"></div>
-                </div>
-                
-                <div class="loading" id="loading">
-                    <div class="loading-spinner"></div>
-                    <p>AI is generating your flashcards...</p>
+                <div class="hamburger">
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                    <span class="bar"></span>
                 </div>
             </div>
-            
-            <div class="output-section">
-                <h2 class="section-title">
-                    <i>📚</i> Your Flashcards
-                </h2>
-                
-                <div class="output-controls">
-                    <button id="export-btn">
-                        <i>📤</i> Export
-                    </button>
-                    <button id="clear-btn">
-                        <i>🗑️</i> Clear All
-                    </button>
-                </div>
-                
-                <div class="flashcards-container" id="flashcards-container">
-                    <div class="empty-state">
-                        <i>📋</i>
-                        <p>Your flashcards will appear here</p>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-container">
+                <div class="hero-content">
+                    <h1>Transform Your Notes Into Smart Flashcards</h1>
+                    <p>AI-powered flashcard generator that turns your study materials into interactive learning tools in seconds.</p>
+                    <div class="hero-buttons">
+                        <button class="btn-primary btn-large" id="hero-register-btn">Get Started</button>
+                        <button class="btn-outline btn-large" id="hero-learn-more">Learn More</button>
                     </div>
                 </div>
+                <div class="hero-image">
+                    <div class="flashcard-demo">
+                        <div class="demo-card">
+                            <div class="demo-card-front">
+                                <p>What is the capital of France?</p>
+                            </div>
+                            <div class="demo-card-back">
+                                <p>Paris</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="features" id="features">
+            <div class="container">
+                <h2>Powerful Features</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <h3>AI-Powered Generation</h3>
+                        <p>Our advanced AI analyzes your notes and creates relevant flashcards automatically.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-language"></i>
+                        </div>
+                        <h3>Multilingual Support</h3>
+                        <p>Create flashcards in multiple languages including French, Spanish, and more.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-history"></i>
+                        </div>
+                        <h3>Spaced Repetition</h3>
+                        <p>Our algorithm schedules reviews at optimal intervals for maximum retention.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-microphone"></i>
+                        </div>
+                        <h3>Voice Notes</h3>
+                        <p>Convert your recorded lectures into flashcards with our speech-to-text technology.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="pricing" id="pricing">
+            <div class="container">
+                <h2>Simple Pricing</h2>
+                <p class="pricing-subtitle">Unlock all features with a one-time payment</p>
+                <div class="pricing-cards">
+                    <div class="pricing-card">
+                        <div class="pricing-header">
+                            <h3>Basic Access</h3>
+                            <div class="price">$1</div>
+                            <p>One-time payment</p>
+                        </div>
+                        <ul class="pricing-features">
+                            <li><i class="fas fa-check"></i> AI Flashcard Generation</li>
+                            <li><i class="fas fa-check"></i> 100 Flashcards per month</li>
+                            <li><i class="fas fa-check"></i> Basic Spaced Repetition</li>
+                            <li><i class="fas fa-times"></i> Voice Notes</li>
+                            <li><i class="fas fa-times"></i> Multilingual Support</li>
+                        </ul>
+                        <button class="btn-primary btn-full">Get Started</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="about" id="about">
+            <div class="container">
+                <h2>How It Works</h2>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Create Your Account</h3>
+                            <p>Sign up with your email and create a password to get started.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Upload Your Notes</h3>
+                            <p>Paste your study materials or upload voice recordings.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Generate Flashcards</h3>
+                            <p>Our AI processes your content and creates interactive flashcards.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h3>Study Smarter</h3>
+                            <p>Use our spaced repetition system to maximize your learning.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta">
+            <div class="container">
+                <h2>Ready to Transform Your Studying?</h2>
+                <p>Join thousands of students who are already using BrainFlip to study more effectively.</p>
+                <button class="btn-primary btn-large" id="cta-register-btn">Create Your Account</button>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <i class="fas fa-brain"></i>
+                        <span>BrainFlip</span>
+                    </div>
+                    <p>Transforming the way students study with AI-powered flashcards.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Product</h4>
+                    <ul>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#pricing">Pricing</a></li>
+                        <li><a href="#">Use Cases</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Company</h4>
+                    <ul>
+                        <li><a href="#about">About</a></li>
+                        <li><a href="#">Blog</a></li>
+                        <li><a href="#">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Connect</h4>
+                    <div class="social-icons">
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="#"><i class="fab fa-facebook"></i></a>
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                        <a href="#"><i class="fab fa-linkedin"></i></a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2023 BrainFlip. All rights reserved.</p>
             </div>
         </div>
-        
-        <footer>
-            <p>AI Flashcard Generator | Built with HTML, CSS, JavaScript and simulated AI processing</p>
-        </footer>
+    </footer>
+
+    <!-- Auth Modals -->
+    <div class="modal" id="login-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Login to Your Account</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form class="auth-form">
+                <div class="form-group">
+                    <label for="login-email">Email</label>
+                    <input type="email" id="login-email" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" required>
+                </div>
+                <button type="submit" class="btn-primary btn-full">Login</button>
+            </form>
+            <div class="auth-switch">
+                <p>Don't have an account? <a href="#" id="switch-to-register">Register</a></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="register-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create an Account</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form class="auth-form">
+                <div class="form-group">
+                    <label for="register-name">Full Name</label>
+                    <input type="text" id="register-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-email">Email</label>
+                    <input type="email" id="register-email" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Password</label>
+                    <input type="password" id="register-password" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-confirm">Confirm Password</label>
+                    <input type="password" id="register-confirm" required>
+                </div>
+                <div class="form-group">
+                    <input type="checkbox" id="terms-agree" required>
+                    <label for="terms-agree">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></label>
+                </div>
+                <button type="submit" class="btn-primary btn-full">Create Account</button>
+            </form>
+            <div class="auth-switch">
+                <p>Already have an account? <a href="#" id="switch-to-login">Login</a></p>
+            </div>
+        </div>
     </div>
     
-    <div class="notification" id="notification">Flashcards generated successfully!</div>
-
+    <script src="https://payment.intasend.com/api/v1/checkout.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
