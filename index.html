@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Flashcard Generator</title>
+    <link rel="stylesheet" href="styles.css">
+
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Flashcard Generator</h1>
+            <p class="subtitle">Transform your notes into interactive study cards in seconds</p>
+        </header>
+
+        <div class="main-content">
+            <div class="input-section">
+                <h2 class="section-title">
+                    <i>📝</i> Input Your Notes
+                </h2>
+                <textarea id="notes-input" placeholder="Paste your study notes here..."></textarea>
+                
+                <div class="options">
+                    <div class="option">
+                        <label for="language">Language:</label>
+                        <select id="language">
+                            <option value="english">English</option>
+                            <option value="french">French</option>
+                            <option value="spanish">Spanish</option>
+                            <option value="german">German</option>
+                            <option value="swahili">Swahili</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button id="generate-btn">
+                    <i>⚡</i> Generate Flashcards
+                </button>
+                
+                <div class="progress">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                
+                <div class="loading" id="loading">
+                    <div class="loading-spinner"></div>
+                    <p>AI is generating your flashcards...</p>
+                </div>
+            </div>
+            
+            <div class="output-section">
+                <h2 class="section-title">
+                    <i>📚</i> Your Flashcards
+                </h2>
+                
+                <div class="output-controls">
+                    <button id="export-btn">
+                        <i>📤</i> Export
+                    </button>
+                    <button id="clear-btn">
+                        <i>🗑️</i> Clear All
+                    </button>
+                </div>
+                
+                <div class="flashcards-container" id="flashcards-container">
+                    <div class="empty-state">
+                        <i>📋</i>
+                        <p>Your flashcards will appear here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>AI Flashcard Generator | Built with HTML, CSS, JavaScript and simulated AI processing</p>
+        </footer>
+    </div>
+    
+    <div class="notification" id="notification">Flashcards generated successfully!</div>
+
+    <script src="script.js"></script>
+</body>
+</html>
