@@ -322,37 +322,6 @@ function handleAuthenticationSuccess(response) {
     window.location.href = 'ai-app.html';
 }
 
-// Example registration handler
-document.getElementById('register-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const name = document.getElementById('register-name').value;
-    const email = document.getElementById('register-email').value;
-    const password = document.getElementById('register-password').value;
-    
-    fetch('/register', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ name, email, password })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            handleAuthenticationSuccess(data);
-        } else if (data.requiresPayment) {
-            showPaymentRequiredModal();
-        } else {
-            alert(data.error || 'Registration failed');
-        }
-    })
-    .catch(error => {
-        console.error('Registration error:', error);
-        alert('Registration failed. Please try again.');
-    });
-});
-
         //STILL AUTHENTICATION
 // Check if user is already logged in when index.html loads
 document.addEventListener('DOMContentLoaded', function() {
@@ -451,3 +420,4 @@ fetch('/some-protected-endpoint', {
 .catch(error => {
     handleAuthError(error);
 });
+
