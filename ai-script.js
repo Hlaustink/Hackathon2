@@ -353,6 +353,9 @@ fetch('/some-protected-endpoint', {
     handleAuthError(error);
 });
 
+const { jsPDF } = window.jspdf;
+const doc = new jsPDF();
+
         //LOGOUT FUNCTION
 function logout() {
     // Clear all stored data
